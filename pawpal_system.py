@@ -1,7 +1,7 @@
 from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, List, Optional
+from typing import Any, Dict, List, Optional
 
 
 @dataclass
@@ -10,28 +10,21 @@ class Task:
     title: str
     description: Optional[str] = None
     due_date: Optional[datetime] = None
+    frequency: Optional[str] = None
     completed: bool = False
+    created_at: datetime = field(default_factory=datetime.utcnow)
+    notes: Optional[str] = None
 
     def mark_complete(self) -> None:
-        pass
+        self.completed = True
 
     def postpone(self, new_due_date: datetime) -> None:
-        pass
+        if new_due_date <= datetime.utcnow():
+            raise ValueError("new_due_date must be in the future")
+        self.due_date = new_due_date
 
-
-@dataclass
-class User:
-    user_id: str
-    email: str
-    password: str
-    caregiver_role: str
-    pets: List[Pet] = field(default_factory=list)
-
-    def add_pet(self, pet: Pet) -> None:
-        pass
-
-    def invite_caregiver(self, caregiver_email: str) -> None:
-        pass
+    def is_overdue(self) -> bool:
+        return bool(self.due_date and not self.completed and self.due_date < datetime.utcnow())
 
 
 @dataclass
@@ -41,113 +34,144 @@ class Pet:
     breed: str
     weight: float
     age: int
-    feedings: List[Feeding] = field(default_factory=list)
-    walks: List[Walk] = field(default_factory=list)
-    medications: List[Medication] = field(default_factory=list)
-    appointments: List[Appointment] = field(default_factory=list)
+    owner: Optional[Owner] = None
+    tasks: List[Task] = field(default_factory=list)
 
-    def update_profile(self) -> None:
-        pass
+    def add_task(self, task: Task) -> None:
+        self.tasks.append(task)
 
-    def generate_health_report(self) -> None:
-        pass
+    def remove_task(self, task_id: str) -> None:
+        self.tasks = [task for task in self.tasks if task.task_id != task_id]
 
+    def get_tasks(self, completed: Optional[bool] = None) -> List[Task]:
+        if completed is None:
+            return list(self.tasks)
+        return [task for task in self.tasks if task.completed == completed]
 
-@dataclass
-class Feeding:
-    feeding_id: str
-    food_type: str
-    portion_size: str
-    scheduled_time: datetime
-    is_completed: bool = False
-    completed_by: Optional[str] = None
+    def get_overdue_tasks(self) -> List[Task]:
+        return [task for task in self.tasks if task.is_overdue()]
 
-    def schedule_feeding(self) -> None:
-        pass
+    def update_profile(
+        self,
+        name: Optional[str] = None,
+        breed: Optional[str] = None,
+        weight: Optional[float] = None,
+        age: Optional[int] = None,
+    ) -> None:
+        if name is not None:
+            self.name = name
+        if breed is not None:
+            self.breed = breed
+        if weight is not None:
+            self.weight = weight
+        if age is not None:
+            self.age = age
 
-    def mark_as_fed(self) -> None:
-        pass
-
-    def send_reminder(self) -> None:
-        pass
-
-    def update_portion(self, portion_size: str) -> None:
-        pass
-
-    def log_skipped_meal(self) -> None:
-        pass
-
-
-@dataclass
-class Walk:
-    walk_id: str
-    start_time: Optional[datetime] = None
-    end_time: Optional[datetime] = None
-    distance: float = 0.0
-    gps_route: List[Any] = field(default_factory=list)
-    potty_breaks: int = 0
-
-    def start_walk(self) -> None:
-        pass
-
-    def end_walk(self) -> None:
-        pass
-
-    def log_potty(self) -> None:
-        pass
-
-    def calculate_duration(self) -> None:
-        pass
-
-    def share_walk_report(self) -> None:
-        pass
+    def generate_health_report(self) -> Dict[str, Any]:
+        return {
+            "pet_id": self.pet_id,
+            "name": self.name,
+            "breed": self.breed,
+            "weight": self.weight,
+            "age": self.age,
+            "task_count": len(self.tasks),
+            "overdue_tasks": len(self.get_overdue_tasks()),
+        }
 
 
 @dataclass
-class Medication:
-    medication_id: str
-    med_name: str
-    dosage: str
-    frequency: str
-    instructions: str
-    inventory_count: int
+class Owner:
+    owner_id: str
+    email: str
+    password: str
+    caregiver_role: str
+    pets: List[Pet] = field(default_factory=list)
 
-    def administer_dose(self) -> None:
+    def add_pet(self, pet: Pet) -> None:
+        pet.owner = self
+        self.pets.append(pet)
+
+    def remove_pet(self, pet_id: str) -> None:
+        self.pets = [pet for pet in self.pets if pet.pet_id != pet_id]
+
+    def get_all_tasks(self, completed: Optional[bool] = None) -> List[Task]:
+        all_tasks: List[Task] = []
+        for pet in self.pets:
+            all_tasks.extend(pet.get_tasks(completed=completed))
+        return all_tasks
+
+    def find_pet(self, pet_id: str) -> Optional[Pet]:
+        for pet in self.pets:
+            if pet.pet_id == pet_id:
+                return pet
+        return None
+
+    def invite_caregiver(self, caregiver_email: str) -> None:
+        # placeholder for invite workflow
         pass
 
-    def schedule_next_dose(self) -> None:
-        pass
 
-    def check_refill_status(self) -> None:
-        pass
+class Scheduler:
+    def __init__(self, owners: Optional[List[Owner]] = None) -> None:
+        self.owners: List[Owner] = owners or []
 
-    def trigger_refill_alert(self) -> None:
-        pass
+    def register_owner(self, owner: Owner) -> None:
+        self.owners.append(owner)
 
-    def skip_dose(self) -> None:
-        pass
+    def get_tasks_for_owner(self, owner_id: str, completed: Optional[bool] = None) -> List[Task]:
+        owner = self._find_owner(owner_id)
+        if not owner:
+            return []
+        return owner.get_all_tasks(completed=completed)
 
+    def get_tasks_for_pet(self, pet_id: str, completed: Optional[bool] = None) -> List[Task]:
+        for owner in self.owners:
+            pet = owner.find_pet(pet_id)
+            if pet:
+                return pet.get_tasks(completed=completed)
+        return []
 
-@dataclass
-class Appointment:
-    appointment_id: str
-    provider_name: str
-    date_time: datetime
-    location: str
-    reason: str
-    notes: Optional[str] = None
+    def organize_tasks_by_due_date(self, tasks: List[Task]) -> List[Task]:
+        return sorted(tasks, key=lambda task: task.due_date or datetime.max)
 
-    def create_appointment(self) -> None:
-        pass
+    def get_overdue_tasks(self) -> List[Task]:
+        overdue_tasks: List[Task] = []
+        for owner in self.owners:
+            overdue_tasks.extend(owner.get_all_tasks())
+        return [task for task in overdue_tasks if task.is_overdue()]
 
-    def reschedule(self, new_date_time: datetime) -> None:
-        pass
+    def schedule_task(self, pet_id: str, task: Task) -> None:
+        for owner in self.owners:
+            pet = owner.find_pet(pet_id)
+            if pet:
+                pet.add_task(task)
+                return
+        raise ValueError(f"No pet found with id {pet_id}")
 
-    def cancel_appointment(self) -> None:
-        pass
+    def reschedule_task(self, task_id: str, new_due_date: datetime) -> None:
+        task = self._find_task_by_id(task_id)
+        if task is None:
+            raise ValueError(f"Task {task_id} not found")
+        task.postpone(new_due_date)
 
-    def send_reminder(self) -> None:
-        pass
+    def cancel_task(self, task_id: str) -> None:
+        for owner in self.owners:
+            for pet in owner.pets:
+                if any(task.task_id == task_id for task in pet.tasks):
+                    pet.remove_task(task_id)
+                    return
+        raise ValueError(f"Task {task_id} not found")
 
-    def attach_document(self, document: Any) -> None:
-        pass
+    def _find_owner(self, owner_id: str) -> Optional[Owner]:
+        for owner in self.owners:
+            if owner.owner_id == owner_id:
+                return owner
+        return None
+
+    def _find_task_by_id(self, task_id: str) -> Optional[Task]:
+        for owner in self.owners:
+            for pet in owner.pets:
+                for task in pet.tasks:
+                    if task.task_id == task_id:
+                        return task
+        return None
