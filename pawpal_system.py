@@ -134,6 +134,27 @@ class Scheduler:
     def organize_tasks_by_due_date(self, tasks: List[Task]) -> List[Task]:
         return sorted(tasks, key=lambda task: task.due_date or datetime.max)
 
+    def sort_by_time(self, tasks: List[Task]) -> List[Task]:
+        """Sort tasks by their due time in HH:MM format."""
+        return sorted(
+            tasks,
+            key=lambda task: task.due_date.strftime("%H:%M") if task.due_date else "",
+        )
+
+    def filter_tasks(
+        self,
+        completed: Optional[bool] = None,
+        pet_name: Optional[str] = None,
+    ) -> List[Task]:
+        """Filter tasks by completion status and/or pet name."""
+        filtered_tasks: List[Task] = []
+        for owner in self.owners:
+            for pet in owner.pets:
+                if pet_name is not None and pet.name != pet_name:
+                    continue
+                filtered_tasks.extend(pet.get_tasks(completed=completed))
+        return filtered_tasks
+
     def get_overdue_tasks(self) -> List[Task]:
         overdue_tasks: List[Task] = []
         for owner in self.owners:

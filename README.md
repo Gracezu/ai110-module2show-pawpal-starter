@@ -1,6 +1,6 @@
 # PawPal+ (Module 2 Project)
 
-You are building **PawPal+**, a Streamlit app that helps a pet owner plan care tasks for their pet.
+You are building PawPal+, a Streamlit app that helps a pet owner plan care tasks for their pet.
 
 ## Scenario
 
@@ -21,6 +21,12 @@ Your final app should:
 - Generate a daily schedule/plan based on constraints and priorities
 - Display the plan clearly (and ideally explain the reasoning)
 - Include tests for the most important scheduling behaviors
+
+## Smarter Scheduling
+
+The backend system now includes advanced scheduling algorithms:
+- Automated Recurring Tasks: When a user completes a task marked as "daily" or "weekly", the `Scheduler` automatically uses Python's `timedelta` to generate the next occurrence and assigns it to the pet's schedule. 
+- Lightweight Conflict Detection:The app groups tasks by their scheduled execution time and issues a system warning if two tasks are booked for the exact same time, preventing double-booking across different pets.
 
 ## Getting started
 
