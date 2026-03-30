@@ -1,6 +1,8 @@
 from __future__ import annotations
+import uuid
+from collections import defaultdict
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
 
@@ -107,7 +109,6 @@ class Owner:
         return None
 
     def invite_caregiver(self, caregiver_email: str) -> None:
-        # placeholder for invite workflow
         pass
 
 
@@ -117,6 +118,50 @@ class Scheduler:
 
     def register_owner(self, owner: Owner) -> None:
         self.owners.append(owner)
+
+    def complete_task(self, task_id: str) -> None:
+        task = self._find_task_by_id(task_id)
+        if task is None:
+            raise ValueError(f"Task {task_id} not found")
+        task.mark_complete()
+
+        if task.frequency and task.due_date:
+            new_due_date = None
+            if task.frequency.lower() == "daily":
+                new_due_date = task.due_date + timedelta(days=1)
+            elif task.frequency.lower() == "weekly":
+                new_due_date = task.due_date + timedelta(weeks=1)
+
+            if new_due_date:
+                new_task = Task(
+                    task_id=f"{task.task_id}_recurring_{uuid.uuid4().hex[:4]}",
+                    title=task.title,
+                    description=task.description,
+                    due_date=new_due_date,
+                    frequency=task.frequency,
+                    completed=False,
+                    notes=task.notes,
+                )
+                for owner in self.owners:
+                    for pet in owner.pets:
+                        if task in pet.tasks:
+                            pet.add_task(new_task)
+                            return
+
+    def check_conflicts(self) -> List[str]:
+        warnings: List[str] = []
+        time_map: Dict[datetime, List[Task]] = defaultdict(list)
+        for owner in self.owners:
+            for task in owner.get_all_tasks(completed=False):
+                if task.due_date:
+                    rounded_time = task.due_date.replace(second=0, microsecond=0)
+                    time_map[rounded_time].append(task)
+        for scheduled_time, tasks_at_time in time_map.items():
+            if len(tasks_at_time) > 1:
+                titles = [f"'{task.title}'" for task in tasks_at_time]
+                warnings.append(
+                    f"⚠️ Conflict: {' and '.join(titles)} are both scheduled at {scheduled_time.strftime('%H:%M')}.")
+        return warnings
 
     def get_tasks_for_owner(self, owner_id: str, completed: Optional[bool] = None) -> List[Task]:
         owner = self._find_owner(owner_id)
@@ -135,10 +180,9 @@ class Scheduler:
         return sorted(tasks, key=lambda task: task.due_date or datetime.max)
 
     def sort_by_time(self, tasks: List[Task]) -> List[Task]:
-        """Sort tasks by their due time in HH:MM format."""
         return sorted(
             tasks,
-            key=lambda task: task.due_date.strftime("%H:%M") if task.due_date else "",
+            key=lambda task: task.due_date.strftime('%H:%M') if task.due_date else '',
         )
 
     def filter_tasks(
@@ -146,7 +190,6 @@ class Scheduler:
         completed: Optional[bool] = None,
         pet_name: Optional[str] = None,
     ) -> List[Task]:
-        """Filter tasks by completion status and/or pet name."""
         filtered_tasks: List[Task] = []
         for owner in self.owners:
             for pet in owner.pets:
